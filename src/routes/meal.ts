@@ -33,4 +33,33 @@ export async function mealRoutes(app: FastifyInstance) {
 
     res.send('New meal added!')
   })
+
+  app.put('/:meal_id', async (req, res) => {
+    const updateMealParams = z.object({
+      meal_id: z.coerce.number(),
+    })
+
+    const { meal_id } = updateMealParams.parse(req.params)
+    let record = await db.select().from(table).where({ meal_id }).first()
+
+    const updateMealSchema = z.object({
+      meal_name: z.string().default(''),
+      meal_desc: z.string().default(''),
+      belongs_to_diet: z.boolean().default(record.belongs_to_diet),
+      date_and_time: z.string().default(''),
+    })
+
+    const data = updateMealSchema.parse(req.body)
+
+    for (let key in data) {
+      if (typeof data[key] === 'boolean' && data[key] != record[key]) {
+        record[key] = data[key]
+      } else if (data[key] && data[key] != record[key]) {
+        record[key] = data[key]
+      }
+    }
+    await db(table).where({ meal_id }).update(record)
+
+    res.send('Meal updated!')
+  })
 }

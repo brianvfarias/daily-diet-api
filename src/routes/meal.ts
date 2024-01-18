@@ -98,6 +98,8 @@ export async function mealRoutes(app: FastifyInstance) {
         .andWhere('session_id', sessionID)
         .first()
 
+      if (!record) return res.send('No record found!')
+
       const updateMealSchema = z.object({
         meal_name: z.string().default(''),
         meal_desc: z.string().default(''),
@@ -141,6 +143,39 @@ export async function mealRoutes(app: FastifyInstance) {
         .where({ meal_id })
         .andWhere('session_id', sessionID)
       res.send('Meal deleted successfully!')
+    }
+  )
+
+  app.get(
+    '/analytics',
+    {
+      preHandler: [checkIfSessionIDExists],
+    },
+    async (req, res) => {
+      const { sessionID } = req.cookies
+      if (sessionID) {
+        const { rows } = await db.raw(
+          'SELECT session_id, belongs_to_diet, COUNT(meal_id) as total_meals FROM meals WHERE session_id = ? GROUP BY session_id, belongs_to_diet;',
+          sessionID
+        )
+        const analytics = rows.reduce(
+          (acc, row) => {
+            acc.total_meals = Number(row.total_meals) + acc.total_meals
+            if (row.belongs_to_diet === true)
+              acc.clean_meals = Number(row.total_meals)
+            if (row.belongs_to_diet === false)
+              acc.junk_meals = Number(row.total_meals)
+            return acc
+          },
+          {
+            total_meals: 0,
+            clean_meals: 0,
+            junk_meals: 0,
+          }
+        )
+        res.send({ rows, analytics })
+      }
+      res.send('No user found with this ID!')
     }
   )
 }

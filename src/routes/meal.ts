@@ -4,7 +4,7 @@ import { z } from 'zod'
 import crypto from 'node:crypto'
 import { checkIfSessionIDExists } from '../middlewares/check-session-id-existance'
 
-const table = 'daily_diet'
+const table = 'meals'
 
 export async function mealRoutes(app: FastifyInstance) {
   app.get(
@@ -29,7 +29,7 @@ export async function mealRoutes(app: FastifyInstance) {
     async (req, res) => {
       const { sessionID } = req.cookies
       const getMealParams = z.object({
-        meal_id: z.coerce.number(),
+        meal_id: z.string(),
       })
       const { meal_id } = getMealParams.parse(req.params)
       const searchedMeal = await db
@@ -47,9 +47,9 @@ export async function mealRoutes(app: FastifyInstance) {
       meal_name: z.string(),
       meal_desc: z.string(),
       belongs_to_diet: z.boolean().default(true),
-      date_and_time: z.string().default(''),
+      meal_time: z.string().default(''),
     })
-    const { meal_name, meal_desc, belongs_to_diet, date_and_time } =
+    const { meal_name, meal_desc, belongs_to_diet, meal_time } =
       mealCreationSchema.parse(req.body)
 
     let sessionID = req.cookies.sessionID
@@ -63,12 +63,13 @@ export async function mealRoutes(app: FastifyInstance) {
     }
 
     await db(table).insert({
+      meal_id: crypto.randomUUID(),
       meal_name,
       meal_desc,
-      date_and_time: date_and_time
+      meal_time: meal_time
         ? db.raw(
             `TO_TIMESTAMP(?, 'DD/MM/YYYY, HH24:MI:SS')`,
-            new Date(date_and_time).toLocaleString('pt-BR')
+            new Date(meal_time).toLocaleString('pt-BR')
           )
         : db.fn.now(0),
       belongs_to_diet,
@@ -86,7 +87,7 @@ export async function mealRoutes(app: FastifyInstance) {
     async (req, res) => {
       const { sessionID } = req.cookies
       const updateMealParams = z.object({
-        meal_id: z.coerce.number(),
+        meal_id: z.string(),
       })
 
       const { meal_id } = updateMealParams.parse(req.params)
@@ -101,7 +102,7 @@ export async function mealRoutes(app: FastifyInstance) {
         meal_name: z.string().default(''),
         meal_desc: z.string().default(''),
         belongs_to_diet: z.boolean().default(record.belongs_to_diet),
-        date_and_time: z.string().default(''),
+        meal_time: z.string().default(''),
       })
 
       const data = updateMealSchema.parse(req.body)
@@ -129,7 +130,7 @@ export async function mealRoutes(app: FastifyInstance) {
     async (req, res) => {
       const { sessionID } = req.cookies
       const deleteMealParams = z.object({
-        meal_id: z.coerce.number(),
+        meal_id: z.string(),
       })
 
       const { meal_id } = deleteMealParams.parse(req.params)

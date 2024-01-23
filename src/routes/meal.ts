@@ -6,6 +6,10 @@ import { checkIfSessionIDExists } from '../middlewares/check-session-id-existanc
 
 const table = 'meals'
 
+interface BelongsToDiet {
+  belongs_to_diet: boolean
+}
+
 export async function mealRoutes(app: FastifyInstance) {
   app.get(
     '/',
@@ -154,6 +158,26 @@ export async function mealRoutes(app: FastifyInstance) {
     async (req, res) => {
       const { sessionID } = req.cookies
       if (sessionID) {
+        const meals = await db
+          .select('belongs_to_diet')
+          .from('meals')
+          .where('session_id', sessionID)
+          .orderBy('meal_time')
+        // let streak: BelongsToDiet[] = []
+        let streaks = meals.reduce(
+          (streaks, item) => {
+            let index = streaks.length > 0 ? streaks.length - 1 : 0
+            if (item.belongs_to_diet) {
+              streaks[index] = streaks[index] + 1
+            } else {
+              streaks.push(0)
+            }
+            return streaks
+          },
+          [0]
+        )
+        console.log(streaks)
+
         const { rows } = await db.raw(
           'SELECT session_id, belongs_to_diet, COUNT(meal_id) as total_meals FROM meals WHERE session_id = ? GROUP BY session_id, belongs_to_diet;',
           sessionID
@@ -173,7 +197,12 @@ export async function mealRoutes(app: FastifyInstance) {
             junk_meals: 0,
           }
         )
-        res.send({ rows, analytics })
+        res.send({
+          higgest_streak: Math.max(...streaks),
+          meals,
+          rows,
+          analytics,
+        })
       }
       res.send('No user found with this ID!')
     }

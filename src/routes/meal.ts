@@ -79,7 +79,6 @@ export async function mealRoutes(app: FastifyInstance) {
       belongs_to_diet,
       session_id: sessionID,
     })
-
     res.send('New meal added!')
   })
 
@@ -199,8 +198,6 @@ export async function mealRoutes(app: FastifyInstance) {
         )
         res.send({
           higgest_streak: Math.max(...streaks),
-          meals,
-          rows,
           analytics,
         })
       }

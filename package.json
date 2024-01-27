@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "tsx --watch ./src/server.ts",
-    "knex": "node --loader tsx ./node_modules/.bin/knex",
+    "knex": "node --import tsx ./node_modules/.bin/knex",
     "build": "tsup src",
     "test": "vitest"
   },

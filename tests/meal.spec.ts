@@ -1,21 +1,10 @@
-import {
-  afterAll,
-  beforeAll,
-  it,
-  describe,
-  expect,
-  beforeEach,
-  expectTypeOf,
-} from 'vitest';
+import { afterAll, beforeAll, it, describe, expect, beforeEach } from 'vitest';
 import supertest from 'supertest';
 import { app } from '../src/app';
 import { db } from '../src/database';
 import { execSync } from 'child_process';
 
 const client = supertest(app.server);
-let cookies = '';
-// const table = 'meals_test';
-
 describe('Meal routes', () => {
   beforeAll(async () => {
     await app.ready();
@@ -32,7 +21,6 @@ describe('Meal routes', () => {
 
   describe('POST /meal Should validate required fields before creation', () => {
     function properSessionID(cookies: Array<string>) {
-      console.log(cookies);
       return cookies?.some(
         (cookie) => cookie.includes('sessionID=') && cookie.length > 25
       );
@@ -142,7 +130,118 @@ describe('Meal routes', () => {
   });
 
   describe('PUT /meal', () => {
-    it.todo('should update the created meal', async () => {
+    it('should update meals with the info passed in the PUT body', async () => {
+      const creationResponse = await client.post('/meal').send({
+        meal_name: 'Test 1',
+        meal_desc: 'Meal description for this test',
+        meal_time: '23 Jan 2023 12:55',
+        belongs_to_diet: true,
+      });
+      let rowCreate;
+
+      if (creationResponse.statusCode === 200) {
+        rowCreate = await db.select('*').from('meals').first();
+        console.log(rowCreate);
+      }
+      const cookies = creationResponse.headers['set-cookie'];
+
+      const updateResponse = await client
+        .put(`/meal/${rowCreate?.meal_id}`)
+        .set('Cookie', cookies)
+        .send({
+          meal_name: 'Meal Name Update',
+          meal_desc: 'Meal description update',
+          // meal_time: '23 Jan 2023 12:55',
+          belongs_to_diet: true,
+        })
+        .expect(200)
+        .expect('Meal updated!');
+
+      const updateRow = await db
+        .select()
+        .from('meals')
+        .where('meal_id', rowCreate?.meal_id);
+
+      expect(updateRow).toEqual([
+        expect.objectContaining({
+          meal_id: rowCreate.meal_id,
+          meal_name: 'Meal Name Update',
+          meal_desc: 'Meal description update',
+          // meal_time: '23 Jan 2023 12:55',
+          belongs_to_diet: true,
+        }),
+      ]);
+    });
+
+    it('should not update the meal record if user is not validate by session_id', async () => {
+      const creationResponse = await client.post('/meal').send({
+        meal_name: 'Test 1',
+        meal_desc: 'Meal description for this test',
+        meal_time: '23 Jan 2023 12:55',
+        belongs_to_diet: true,
+      });
+      let rowCreate;
+
+      if (creationResponse.statusCode === 200) {
+        rowCreate = await db.select('*').from('meals').first();
+        console.log(rowCreate);
+      }
+      const cookies = creationResponse.headers['set-cookie'];
+
+      const updateResponse = await client
+        .put(`/meal/${rowCreate?.meal_id}`)
+        .send({
+          meal_name: 'Meal Name Update',
+          meal_desc: 'Meal description update',
+          // meal_time: '23 Jan 2023 12:55',
+          belongs_to_diet: true,
+        })
+        .expect(401);
+
+      const updateRow = await db
+        .select()
+        .from('meals')
+        .where('meal_id', rowCreate?.meal_id);
+
+      expect(updateRow.length).toEqual(1);
+      expect(updateRow[0]).toEqual(rowCreate);
+    });
+  });
+
+  describe('GET /meal', () => {
+    it('should bring every meal created', async () => {
+      const creationResponse = await client.post('/meal').send({
+        meal_name: 'Test 1',
+        meal_desc: 'Meal description for test 1',
+        meal_time: '23 Jan 2023 12:55',
+        belongs_to_diet: true,
+      });
+
+      const cookies = creationResponse.headers['set-cookie'];
+
+      await client.post('/meal').set('Cookie', cookies).send({
+        meal_name: 'Test 2',
+        meal_desc: 'Meal description for test 2',
+        meal_time: '26 Jan 2023 12:55',
+        belongs_to_diet: false,
+      });
+
+      await client.post('/meal').set('Cookie', cookies).send({
+        meal_name: 'Test 3',
+        meal_desc: 'Meal description for test 3',
+        meal_time: '28 Jan 2023 12:55',
+        belongs_to_diet: true,
+      });
+
+      const getMealsResponse = await client
+        .get('/meal')
+        .set('Cookie', cookies)
+        .expect(200);
+      const responseBody = JSON.parse(getMealsResponse.text);
+      expect(responseBody.length).toEqual(3);
+    });
+
+    it('should not bring meals if user is not validated by session_id', async () => {
       const creationResponse = await client.post('/meal').send({
         meal_name: 'Test 1',
         meal_desc: 'Meal description for this test',
@@ -150,9 +249,61 @@ describe('Meal routes', () => {
         belongs_to_diet: true,
       });
 
+      const cookies = creationResponse.headers['set-cookie'];
+
+      const getMealResponse = await client.get(`/meal`).expect(401).expect({
+        error: 'Unathorized access. User not validated',
+      });
+    });
+
+    it('should bring only the meal with the meal_id passed', async () => {
+      const creationResponse = await client.post('/meal').send({
+        meal_name: 'Test 1',
+        meal_desc: 'Meal description for this test',
+        meal_time: '23 Jan 2023 12:55',
+        belongs_to_diet: true,
+      });
+      let rowCreated;
       if (creationResponse.statusCode === 200) {
-        const rowCreate = db.select('*').from('meals').first();
+        rowCreated = await db.select().from('meals').first();
       }
+
+      const cookies = creationResponse.headers['set-cookie'];
+
+      const getMealResponse = await client
+        .get(`/meal/${rowCreated?.meal_id}`)
+        .set('Cookie', cookies)
+        .expect(200);
+
+      let responseBody = JSON.parse(getMealResponse.text);
+      responseBody.meal_time = new Date(responseBody.meal_time);
+      expect(responseBody).toEqual(rowCreated);
+    });
+
+    it('should not bring the meal with the meal_id passed if user is not validated by sesssion_id', async () => {
+      const creationResponse = await client.post('/meal').send({
+        meal_name: 'Test 1',
+        meal_desc: 'Meal description for this test',
+        meal_time: '23 Jan 2023 12:55',
+        belongs_to_diet: true,
+      });
+      let rowCreated;
+      if (creationResponse.statusCode === 200) {
+        rowCreated = await db.select().from('meals').first();
+      }
+
+      const cookies = creationResponse.headers['set-cookie'];
+
+      const getMealResponse = await client
+        .get(`/meal/${rowCreated?.meal_id}`)
+        .expect(401)
+        .expect({
+          error: 'Unathorized access. User not validated',
+        });
+
+      // let responseBody = JSON.parse(getMealResponse.text);
+      // console.log(responseBody);
+      // expect(responseBody).toBeFalsy();
     });
   });
 });

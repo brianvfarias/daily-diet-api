@@ -144,12 +144,12 @@ export async function mealRoutes(app: FastifyInstance) {
 
       const { meal_id } = deleteMealParams.parse(req.params);
 
-      await db
+      const mealDeleted = await db
         .delete()
         .from(table)
         .where({ meal_id })
         .andWhere('session_id', sessionID);
-      res.send('Meal deleted successfully!');
+      res.send({ deleted: mealDeleted });
     }
   );
 

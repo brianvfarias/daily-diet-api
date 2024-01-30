@@ -3,6 +3,7 @@ import supertest from 'supertest';
 import { app } from '../src/app';
 import { db } from '../src/database';
 import { execSync } from 'child_process';
+import { set } from 'zod';
 
 const client = supertest(app.server);
 describe('Meal routes', () => {
@@ -141,7 +142,6 @@ describe('Meal routes', () => {
 
       if (creationResponse.statusCode === 200) {
         rowCreate = await db.select('*').from('meals').first();
-        console.log(rowCreate);
       }
       const cookies = creationResponse.headers['set-cookie'];
 
@@ -184,7 +184,6 @@ describe('Meal routes', () => {
 
       if (creationResponse.statusCode === 200) {
         rowCreate = await db.select('*').from('meals').first();
-        console.log(rowCreate);
       }
       const cookies = creationResponse.headers['set-cookie'];
 
@@ -300,10 +299,139 @@ describe('Meal routes', () => {
         .expect({
           error: 'Unathorized access. User not validated',
         });
+    });
+  });
+  describe('DELETE /meal', () => {
+    it('should delete the task with the corresponding ID', async () => {
+      const creationResponse = await client.post('/meal').send({
+        meal_name: 'Test 1',
+        meal_desc: 'Meal description for this test',
+        meal_time: '23 Jan 2023 12:55',
+        belongs_to_diet: true,
+      });
 
-      // let responseBody = JSON.parse(getMealResponse.text);
-      // console.log(responseBody);
-      // expect(responseBody).toBeFalsy();
+      let cookies;
+
+      if (creationResponse.statusCode === 200) {
+        cookies = creationResponse.headers['set-cookie'];
+      }
+
+      await client.post('/meal').set('Cookie', cookies).send({
+        meal_name: 'Test 2',
+        meal_desc: 'Meal description test 2',
+        meal_time: '23 Jan 2023 12:55',
+        belongs_to_diet: false,
+      });
+
+      const rowsCreated = await db.select().from('meals');
+      const expetedResponse = {
+        deleted: 1,
+      };
+      const deletetion = await client
+        .delete(`/meal/${rowsCreated[0].meal_id}`)
+        .set('Cookie', cookies)
+        .expect(200)
+        .expect(expetedResponse);
+
+      const rowsAfterDeletion = await db.select().from('meals');
+
+      expect(rowsAfterDeletion.length).toEqual(1);
+
+      expect(rowsAfterDeletion).toEqual([
+        expect.not.objectContaining(rowsCreated[0]),
+      ]);
+    });
+    it('should not delete any meals if the user is not validated by session_id', async () => {
+      const creationResponse = await client.post('/meal').send({
+        meal_name: 'Test 1',
+        meal_desc: 'Meal description for this test',
+        meal_time: '23 Jan 2023 12:55',
+        belongs_to_diet: true,
+      });
+
+      const rowsCreated = await db.select().from('meals');
+      const deletetion = await client
+        .delete(`/meal/${rowsCreated[0].meal_id}`)
+        .expect(401)
+        .expect({
+          error: 'Unathorized access. User not validated',
+        });
+    });
+  });
+
+  describe('GET /meal/analytics', () => {
+    it('should bring the correct analytics', async () => {
+      const creationResponse = await client.post('/meal').send({
+        meal_name: 'Test 1',
+        meal_desc: 'Meal description for test 1',
+        meal_time: '21 Jan 2023 12:55',
+        belongs_to_diet: true,
+      });
+
+      const cookies = creationResponse.headers['set-cookie'];
+
+      await client.post('/meal').set('Cookie', cookies).send({
+        meal_name: 'Test 2',
+        meal_desc: 'Meal description for test 2',
+        meal_time: '21 Jan 2023 13:55',
+        belongs_to_diet: false,
+      });
+
+      await client.post('/meal').set('Cookie', cookies).send({
+        meal_name: 'Test 3',
+        meal_desc: 'Meal description for test 3',
+        meal_time: '21 Jan 2023 14:55',
+        belongs_to_diet: true,
+      });
+
+      await client.post('/meal').set('Cookie', cookies).send({
+        meal_name: 'Test 4',
+        meal_desc: 'Meal description for test 4',
+        meal_time: '21 Jan 2023 15:55',
+        belongs_to_diet: false,
+      });
+
+      await client.post('/meal').set('Cookie', cookies).send({
+        meal_name: 'Test 5',
+        meal_desc: 'Meal description for test 5',
+        meal_time: '21 Jan 2023 16:55',
+        belongs_to_diet: false,
+      });
+
+      await client.post('/meal').set('Cookie', cookies).send({
+        meal_name: 'Test 6',
+        meal_desc: 'Meal description for test 6',
+        meal_time: '21 Jan 2023 17:55',
+        belongs_to_diet: true,
+      });
+
+      await client.post('/meal').set('Cookie', cookies).send({
+        meal_name: 'Test 7',
+        meal_desc: 'Meal description for test 7',
+        meal_time: '21 Jan 2023 18:55',
+        belongs_to_diet: true,
+      });
+
+      await client.post('/meal').set('Cookie', cookies).send({
+        meal_name: 'Test 8',
+        meal_desc: 'Meal description for test 8',
+        meal_time: '21 Jan 2023 19:55',
+        belongs_to_diet: true,
+      });
+      const expectResponse = {
+        higgest_streak: 3,
+        analytics: {
+          total_meals: 8,
+          clean_meals: 5,
+          junk_meals: 3,
+        },
+      };
+
+      const analyticsResponse = await client
+        .get('/meal/analytics')
+        .set('Cookie', cookies)
+        .expect(200)
+        .expect(expectResponse);
     });
   });
 });
